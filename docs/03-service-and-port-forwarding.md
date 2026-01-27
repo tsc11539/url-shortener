@@ -215,13 +215,89 @@ flowchart LR
     E -->|TCP| F
 ```
 
-## 10. Key Takeaways
+---
+
+## 10. Rolling Update Behavior When Readiness Fails
+
+During the port-forwarding experiment, I intentionally broke the `readinessProbe` by patching the Deployment.
+This triggered an important Kubernetes behavior that is central to zero-downtime deployments.
+
+### What Happened
+
+After patching the Deployment:
+
+* A **new Pod** was created using the updated Pod template
+* The new Pod stayed in `Running` state but remained `NotReady`
+* The **existing Pods were not terminated**
+
+Example state:
+
+```text
+Old Pod A   READY 1/1   Running
+Old Pod B   READY 1/1   Running
+New Pod C   READY 0/1   Running
+```
+
+This resulted in more Pods than the desired replica count for a short period of time.
+
+---
+
+### Why Old Pods Were Not Deleted
+
+Kubernetes Deployments use a **rolling update strategy** by default.
+
+The key rule is:
+
+> **Old Pods are not terminated until new Pods become Ready.**
+
+This ensures that:
+
+* Traffic is never dropped during updates
+* Service availability is preserved even if the new version is broken
+
+In this experiment, because the new Pod failed its readiness check:
+
+* Kubernetes paused the rollout
+* Old Pods continued serving traffic
+* The Service endpoints only included the Ready Pods
+
+---
+
+### Interaction with Services and Readiness
+
+This behavior works together with Services and readiness probes:
+
+* **Readiness probes** control whether a Pod receives traffic
+* **Services** only route traffic to Ready Pods
+* **Deployments** refuse to scale down old Pods until replacements are Ready
+
+As a result:
+
+* The Service never routed traffic to the broken Pod
+* Users experienced no downtime
+* The rollout safely stalled instead of causing an outage
+
+---
+
+### Key Insight
+
+> A failed readiness check does not crash the application, but it prevents Kubernetes from trusting it with traffic.
+
+This experiment demonstrates that Kubernetes prioritizes **availability over progress** during rolling updates.
+
+---
+
+## 11. Key Takeaways
 
 * Deployments manage Pods, not networking
 * Services provide stable, load-balanced access to Pods
 * ClusterIP is internal-only by design
 * Port-forwarding bridges the host and cluster temporarily
 * Port-forwarding a Service validates the same path Ingress will use
+* Services route traffic only to Ready Pods
+* Readiness probes gate traffic, not process lifecycle
+* Rolling updates will not remove old Pods until new ones are Ready
+* Zero-downtime is achieved through conservative rollout behavior
 
 ---
 
