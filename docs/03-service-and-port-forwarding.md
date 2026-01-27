@@ -203,7 +203,7 @@ Ingress is added **only after** this base path is confirmed to work.
 flowchart LR
     A[Local Client<br/>curl localhost:8080]
     B[kubectl<br/>TCP listener :8080]
-    C[kube-apiserver<br/>:6443 (mapped)]
+    C[kube-apiserver<br/>:6443 mapped]
     D[kubelet<br/>:10250]
     E[Pod Network Namespace]
     F[Container<br/>Go API :8080]
